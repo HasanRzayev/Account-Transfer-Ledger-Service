@@ -1,0 +1,211 @@
+{
+  "info": {
+    "_postman_id": "8b51d45c-2041-4796-9817-ccdb51184a45",
+    "name": "Hesab Köçürmələri və Baş Kitab Xidməti (Account Transfer & Ledger Service)",
+    "description": "Daxili hesablararası atomik pul köçürmələri, ikiqat mühasibatlıq (Double-entry Ledger), Idempotency-Key və Dapper ilə optimallaşdırılmış çıxarış API kolleksiyası.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Hesablar (Accounts)",
+      "item": [
+        {
+          "name": "Yeni Hesab Yarat (Açılış Balansı ilə)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountHolderName\": \"Kamran Əliyev\",\n  \"initialBalance\": 1200.00,\n  \"currency\": \"AZN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/accounts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "accounts"]
+            },
+            "description": "İlkin açılış balansı ilə yeni bank hesabı yaradır. İlkin balans atomik olaraq Baş Kitaba (Ledger) Kredit kimi qeyd olunur."
+          }
+        },
+        {
+          "name": "Bütün Hesabları və Törəmə Balansları Gətir",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/accounts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "accounts"]
+            },
+            "description": "Bütün aktiv hesabların siyahısını və onların Baş Kitab qeydlərindən hesablanmış real-vaxt balanslarını gətirir."
+          }
+        },
+        {
+          "name": "Hesab Detalları (ID-yə görə)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/accounts/11111111-1111-1111-1111-111111111111",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "accounts", "11111111-1111-1111-1111-111111111111"]
+            }
+          }
+        },
+        {
+          "name": "Hesabın Cari Balansı (Dapper / Ledger Derived)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/accounts/11111111-1111-1111-1111-111111111111/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "accounts", "11111111-1111-1111-1111-111111111111", "balance"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Pul Köçürmələri (Transfers)",
+      "item": [
+        {
+          "name": "Atomik Pul Köçürməsi (Idempotency-Key ilə)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "req-transfer-tx-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccountId\": \"11111111-1111-1111-1111-111111111111\",\n  \"toAccountId\": \"22222222-2222-2222-2222-222222222222\",\n  \"amount\": 150.00,\n  \"description\": \"İcarə haqqı ödənişi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transfers"]
+            },
+            "description": "İki hesab arasında atomik köçürmə (1 Debet, 1 Kredit) icra edir. Idempotency-Key başlığı təkrar icranın qarşısını alır."
+          }
+        },
+        {
+          "name": "Təkrar Köçürmə Sorğusu (İdempotentlik Yoxlanışı)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "req-transfer-tx-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccountId\": \"11111111-1111-1111-1111-111111111111\",\n  \"toAccountId\": \"22222222-2222-2222-2222-222222222222\",\n  \"amount\": 150.00,\n  \"description\": \"İcarə haqqı ödənişi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transfers"]
+            },
+            "description": "Eyni Idempotency-Key ilə göndərilən təkrar sorğu ikili çıxarış etmir, əvvəlki uğurlu cavabı qaytarır (wasCachedResponse: true)."
+          }
+        },
+        {
+          "name": "Son Köçürmələr Siyahısı",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transfers?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "transfers"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Hesab Çıxarışı / Baş Kitab (Statements)",
+      "item": [
+        {
+          "name": "Səhifələnmiş Hesab Çıxarışı (Dapper Pagination & Running Balance)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/statements/11111111-1111-1111-1111-111111111111?pageNumber=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "statements", "11111111-1111-1111-1111-111111111111"],
+              "query": [
+                {
+                  "key": "pageNumber",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Dapper vasitəsilə yüksək sürətlə icra olunan səhifələnmiş çıxarış. Hər sətirdə cari qalıq (running balance) hesablanır."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Konkurentlik & Stres Testi (Concurrency Stress Test)",
+      "item": [
+        {
+          "name": "Eyni Hesaba 10 Paralel Köçürmə (Overdraft Yoxlanışı)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": \"11111111-1111-1111-1111-111111111111\",\n  \"destinationAccountId\": \"22222222-2222-2222-2222-222222222222\",\n  \"transferAmountPerRequest\": 250.00,\n  \"concurrentRequestsCount\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stresstest/concurrency",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stresstest", "concurrency"]
+            },
+            "description": "Eyni anda 10 paralel köçürmə göndərir və balansın heç vaxt mənfiyə düşmədiyini nümayiş etdirir."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ]
+}
