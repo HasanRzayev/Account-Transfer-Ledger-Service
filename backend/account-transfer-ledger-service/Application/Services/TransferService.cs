@@ -115,11 +115,25 @@ public class TransferService : ITransferService
         TransferResultDto result;
         try
         {
-            // Acquire row lock in database (Supports PostgreSQL FOR UPDATE and fallback for SQLite/InMemory)
+            // Acquire row lock in database (Supports MSSQL WITH (UPDLOCK, ROWLOCK, HOLDLOCK), PostgreSQL FOR UPDATE and fallback for SQLite/InMemory)
             if (_dbContext.Database.IsRelational())
             {
+                var isSqlServer = _dbContext.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) ?? false;
                 var isPg = _dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) ?? false;
-                if (isPg)
+
+                if (isSqlServer)
+                {
+                    // Row-level lock in SQL Server (MSSQL)
+                    await _dbContext.Database.ExecuteSqlRawAsync(
+                        """
+                        SELECT Id FROM Accounts WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
+                        WHERE Id IN ({0}, {1})
+                        ORDER BY Id;
+                        """,
+                        new object[] { firstLockId, secondLockId },
+                        cancellationToken);
+                }
+                else if (isPg)
                 {
                     // Row-level lock in PostgreSQL
                     await _dbContext.Database.ExecuteSqlRawAsync(

@@ -1,23 +1,24 @@
 version: '3.8'
 
 services:
-  postgres-db:
-    image: postgres:16-alpine
-    container_name: ledger-postgres-db
+  mssql-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ledger-mssql-db
     restart: always
     environment:
-      POSTGRES_DB: ledgerdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Your_Strong_Password123!
+      - MSSQL_PID=Developer
     ports:
-      - "5432:5432"
+      - "1433:1433"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mssql_data:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ledgerdb"]
-      interval: 5s
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_Strong_Password123!' -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Your_Strong_Password123!' -Q 'SELECT 1'"]
+      interval: 8s
       timeout: 5s
-      retries: 5
+      retries: 6
+      start_period: 15s
 
   backend-api:
     build:
@@ -27,12 +28,12 @@ services:
     restart: always
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=ledgerdb;Username=postgres;Password=postgrespassword
+      - ConnectionStrings__DefaultConnection=Server=mssql-db,1433;Database=LedgerDb;User Id=sa;Password=Your_Strong_Password123!;TrustServerCertificate=True;MultipleActiveResultSets=true;
       - ASPNETCORE_URLS=http://+:8080
     ports:
       - "8080:8080"
     depends_on:
-      postgres-db:
+      mssql-db:
         condition: service_healthy
 
   frontend-app:
@@ -49,4 +50,4 @@ services:
       - backend-api
 
 volumes:
-  postgres_data:
+  mssql_data:

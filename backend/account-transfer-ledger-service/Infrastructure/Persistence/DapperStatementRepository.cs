@@ -34,9 +34,9 @@ public class DapperStatementRepository : ILedgerStatementRepository
         }
 
         const string sql = """
-            SELECT COALESCE(SUM("Amount"), 0)
-            FROM "LedgerEntries"
-            WHERE "AccountId" = @AccountId;
+            SELECT COALESCE(SUM(Amount), 0)
+            FROM LedgerEntries
+            WHERE AccountId = @AccountId;
         """;
 
         return await connection.ExecuteScalarAsync<decimal>(
@@ -70,11 +70,11 @@ public class DapperStatementRepository : ILedgerStatementRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        string sql = """
-            SELECT "AccountId", COALESCE(SUM("Amount"), 0) AS Balance
-            FROM "LedgerEntries"
-            WHERE "AccountId" IN @Ids
-            GROUP BY "AccountId";
+        const string sql = """
+            SELECT AccountId, COALESCE(SUM(Amount), 0) AS Balance
+            FROM LedgerEntries
+            WHERE AccountId IN @Ids
+            GROUP BY AccountId;
         """;
 
         var results = await connection.QueryAsync<BalanceRow>(
@@ -94,9 +94,9 @@ public class DapperStatementRepository : ILedgerStatementRepository
 
         // 1. Get Account Details
         const string accountSql = """
-            SELECT "Id", "AccountNumber", "AccountHolderName", "Currency"
-            FROM "Accounts"
-            WHERE "Id" = @AccountId;
+            SELECT Id, AccountNumber, AccountHolderName, Currency
+            FROM Accounts
+            WHERE Id = @AccountId;
         """;
 
         var accountInfo = await connection.QuerySingleOrDefaultAsync<AccountRow>(
@@ -114,9 +114,9 @@ public class DapperStatementRepository : ILedgerStatementRepository
 
         // 2. Calculate Current Total Balance
         const string balanceSql = """
-            SELECT COALESCE(SUM("Amount"), 0)
-            FROM "LedgerEntries"
-            WHERE "AccountId" = @AccountId;
+            SELECT COALESCE(SUM(Amount), 0)
+            FROM LedgerEntries
+            WHERE AccountId = @AccountId;
         """;
 
         var currentBalance = await connection.ExecuteScalarAsync<decimal>(
@@ -126,10 +126,10 @@ public class DapperStatementRepository : ILedgerStatementRepository
         // 3. Count Total Matching Entries
         const string countSql = """
             SELECT COUNT(1)
-            FROM "LedgerEntries"
-            WHERE "AccountId" = @AccountId
-              AND (@FromDate IS NULL OR "CreatedAtUtc" >= @FromDate)
-              AND (@ToDate IS NULL OR "CreatedAtUtc" <= @ToDate);
+            FROM LedgerEntries
+            WHERE AccountId = @AccountId
+              AND (@FromDate IS NULL OR CreatedAtUtc >= @FromDate)
+              AND (@ToDate IS NULL OR CreatedAtUtc <= @ToDate);
         """;
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
@@ -145,55 +145,108 @@ public class DapperStatementRepository : ILedgerStatementRepository
         int offset = (Math.Max(1, request.PageNumber) - 1) * Math.Max(1, request.PageSize);
         int limit = Math.Max(1, request.PageSize);
 
-        const string paginatedEntriesSql = """
+        // Check if provider is SQLite for LIMIT/OFFSET or SQL Server for OFFSET/FETCH
+        bool isSqlite = connection.GetType().Name.Contains("Sqlite", StringComparison.OrdinalIgnoreCase);
+
+        string paginatedEntriesSql = isSqlite ? """
             WITH OrderedEntries AS (
                 SELECT 
-                    l."Id",
-                    l."AccountId",
-                    l."TransferId",
-                    l."Amount",
-                    l."EntryType",
-                    l."Description",
-                    l."CreatedAtUtc",
-                    SUM(l."Amount") OVER (
-                        PARTITION BY l."AccountId" 
-                        ORDER BY l."CreatedAtUtc" ASC, l."Id" ASC
+                    l.Id,
+                    l.AccountId,
+                    l.TransferId,
+                    l.Amount,
+                    l.EntryType,
+                    l.Description,
+                    l.CreatedAtUtc,
+                    SUM(l.Amount) OVER (
+                        PARTITION BY l.AccountId 
+                        ORDER BY l.CreatedAtUtc ASC, l.Id ASC
                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                    ) as "RunningBalance",
-                    t."FromAccountId",
-                    t."ToAccountId",
+                    ) as RunningBalance,
+                    t.FromAccountId,
+                    t.ToAccountId,
                     CASE 
-                        WHEN l."EntryType" = 1 THEN toAcc."AccountNumber"
-                        WHEN l."EntryType" = 2 THEN fromAcc."AccountNumber"
+                        WHEN l.EntryType = 1 THEN toAcc.AccountNumber
+                        WHEN l.EntryType = 2 THEN fromAcc.AccountNumber
                         ELSE NULL
-                    END as "CounterpartyAccountNumber",
+                    END as CounterpartyAccountNumber,
                     CASE 
-                        WHEN l."EntryType" = 1 THEN toAcc."AccountHolderName"
-                        WHEN l."EntryType" = 2 THEN fromAcc."AccountHolderName"
+                        WHEN l.EntryType = 1 THEN toAcc.AccountHolderName
+                        WHEN l.EntryType = 2 THEN fromAcc.AccountHolderName
                         ELSE NULL
-                    END as "CounterpartyHolderName"
-                FROM "LedgerEntries" l
-                LEFT JOIN "Transfers" t ON l."TransferId" = t."Id"
-                LEFT JOIN "Accounts" fromAcc ON t."FromAccountId" = fromAcc."Id"
-                LEFT JOIN "Accounts" toAcc ON t."ToAccountId" = toAcc."Id"
-                WHERE l."AccountId" = @AccountId
-                  AND (@FromDate IS NULL OR l."CreatedAtUtc" >= @FromDate)
-                  AND (@ToDate IS NULL OR l."CreatedAtUtc" <= @ToDate)
+                    END as CounterpartyHolderName
+                FROM LedgerEntries l
+                LEFT JOIN Transfers t ON l.TransferId = t.Id
+                LEFT JOIN Accounts fromAcc ON t.FromAccountId = fromAcc.Id
+                LEFT JOIN Accounts toAcc ON t.ToAccountId = toAcc.Id
+                WHERE l.AccountId = @AccountId
+                  AND (@FromDate IS NULL OR l.CreatedAtUtc >= @FromDate)
+                  AND (@ToDate IS NULL OR l.CreatedAtUtc <= @ToDate)
             )
             SELECT 
-                "Id",
-                "AccountId",
-                "TransferId",
-                "Amount",
-                "EntryType",
-                "Description",
-                "RunningBalance",
-                "CreatedAtUtc",
-                "CounterpartyAccountNumber",
-                "CounterpartyHolderName"
+                Id,
+                AccountId,
+                TransferId,
+                Amount,
+                EntryType,
+                Description,
+                RunningBalance,
+                CreatedAtUtc,
+                CounterpartyAccountNumber,
+                CounterpartyHolderName
             FROM OrderedEntries
-            ORDER BY "CreatedAtUtc" DESC, "Id" DESC
+            ORDER BY CreatedAtUtc DESC, Id DESC
             LIMIT @Limit OFFSET @Offset;
+        """ : """
+            WITH OrderedEntries AS (
+                SELECT 
+                    l.Id,
+                    l.AccountId,
+                    l.TransferId,
+                    l.Amount,
+                    l.EntryType,
+                    l.Description,
+                    l.CreatedAtUtc,
+                    SUM(l.Amount) OVER (
+                        PARTITION BY l.AccountId 
+                        ORDER BY l.CreatedAtUtc ASC, l.Id ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    ) as RunningBalance,
+                    t.FromAccountId,
+                    t.ToAccountId,
+                    CASE 
+                        WHEN l.EntryType = 1 THEN toAcc.AccountNumber
+                        WHEN l.EntryType = 2 THEN fromAcc.AccountNumber
+                        ELSE NULL
+                    END as CounterpartyAccountNumber,
+                    CASE 
+                        WHEN l.EntryType = 1 THEN toAcc.AccountHolderName
+                        WHEN l.EntryType = 2 THEN fromAcc.AccountHolderName
+                        ELSE NULL
+                    END as CounterpartyHolderName
+                FROM LedgerEntries l
+                LEFT JOIN Transfers t ON l.TransferId = t.Id
+                LEFT JOIN Accounts fromAcc ON t.FromAccountId = fromAcc.Id
+                LEFT JOIN Accounts toAcc ON t.ToAccountId = toAcc.Id
+                WHERE l.AccountId = @AccountId
+                  AND (@FromDate IS NULL OR l.CreatedAtUtc >= @FromDate)
+                  AND (@ToDate IS NULL OR l.CreatedAtUtc <= @ToDate)
+            )
+            SELECT 
+                Id,
+                AccountId,
+                TransferId,
+                Amount,
+                EntryType,
+                Description,
+                RunningBalance,
+                CreatedAtUtc,
+                CounterpartyAccountNumber,
+                CounterpartyHolderName
+            FROM OrderedEntries
+            ORDER BY CreatedAtUtc DESC, Id DESC
+            OFFSET @Offset ROWS
+            FETCH NEXT @Limit ROWS ONLY;
         """;
 
         var rawEntries = await connection.QueryAsync<StatementRowDto>(

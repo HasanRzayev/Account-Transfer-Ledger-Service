@@ -77,13 +77,14 @@ Layihə təmiz qatlı memarlıq (Layered Clean Architecture) prinsipləri ilə d
 ### Seçilmiş Strategiya: İki-Səviyyəli Müdafiə (Dual-Layer Defense)
 1. **Tətbiq Səviyyəsində Deterministik Asinxron Kilid (`KeyedAsyncLock`)**:
    - Mənbə və hədəf hesabların GUID-ləri müqayisə edilərək (`firstLockId < secondLockId`) həmişə eyni ardıcıllıqla kilidlənir. Bu, **A ➔ B** və **B ➔ A** eyni anda baş verdikdə yaranan **Deadlock** vəziyyətini 100% aradan qaldırır.
-2. **Verilənlər Bazası Səviyyəsində Sətir Kilidləməsi (`SELECT ... FOR UPDATE` & ACID Isolation)**:
+2. **Verilənlər Bazası Səviyyəsində Sətir Kilidləməsi (`WITH (UPDLOCK, ROWLOCK, HOLDLOCK)` & ACID Isolation)**:
+   - SQL Server (MSSQL) tranzaksiyasında `UPDLOCK, ROWLOCK, HOLDLOCK` göstərişləri ilə hesab sətirləri eksklüziv kilidlənir.
    - Tranzaksiya daxilində hesabın mövcud Baş Kitab balansı hesablanır.
    - Əgər `currentBalance < request.Amount` olarsa, tranzaksiya ləğv edilir (Rollback) və `InsufficientFundsException` (HTTP 422) atılır.
    - Yalnız balans kifayət etdikdə atomik olaraq 2 Baş Kitab sətri əlavə edilir və Commit edilir.
 
 ### Strategiyaların Müqayisəsi və Trade-off Analizi:
-* **Pessimistic Row Locking (Seçilən)**:
+* **Pessimistic Row Locking (Seçilən - MSSQL UPDLOCK/HOLDLOCK)**:
   - *Üstünlüyü*: Sıfır maliyyə xətası, overdraft riski yoxdur, balans heç vaxt mənfiyə düşə bilməz.
   - *Trade-off*: Çox yüksək paralellikdə eyni hesab üzrə sətir kilidi bir neçə millisaniyə növbə yaradır.
 * **Optimistic Concurrency (RowVersion / Versiya tokeni)**:
@@ -116,27 +117,28 @@ $$\text{Hesab Balansı} = \sum \text{LedgerEntry.Amount}$$
 
 ## ⚡ Dapper ilə Optimizasiya Edilmiş Hesab Çıxarışı
 
-Hesab çıxarışı üçün **Dapper** və SQL Window funksiyalarından istifadə olunur:
+Hesab çıxarışı üçün **Dapper** və MSSQL T-SQL Window funksiyalarından istifadə olunur:
 
 ```sql
 WITH OrderedEntries AS (
     SELECT 
-        l."Id", l."AccountId", l."Amount", l."EntryType", l."Description", l."CreatedAtUtc",
-        SUM(l."Amount") OVER (
-            PARTITION BY l."AccountId" 
-            ORDER BY l."CreatedAtUtc" ASC, l."Id" ASC
+        l.Id, l.AccountId, l.Amount, l.EntryType, l.Description, l.CreatedAtUtc,
+        SUM(l.Amount) OVER (
+            PARTITION BY l.AccountId 
+            ORDER BY l.CreatedAtUtc ASC, l.Id ASC
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) as "RunningBalance",
-        CASE WHEN l."EntryType" = 1 THEN toAcc."AccountHolderName" ELSE fromAcc."AccountHolderName" END as "CounterpartyHolderName"
-    FROM "LedgerEntries" l
-    LEFT JOIN "Transfers" t ON l."TransferId" = t."Id"
-    LEFT JOIN "Accounts" fromAcc ON t."FromAccountId" = fromAcc."Id"
-    LEFT JOIN "Accounts" toAcc ON t."ToAccountId" = toAcc."Id"
-    WHERE l."AccountId" = @AccountId
+        ) as RunningBalance,
+        CASE WHEN l.EntryType = 1 THEN toAcc.AccountHolderName ELSE fromAcc.AccountHolderName END as CounterpartyHolderName
+    FROM LedgerEntries l
+    LEFT JOIN Transfers t ON l.TransferId = t.Id
+    LEFT JOIN Accounts fromAcc ON t.FromAccountId = fromAcc.Id
+    LEFT JOIN Accounts toAcc ON t.ToAccountId = toAcc.Id
+    WHERE l.AccountId = @AccountId
 )
 SELECT * FROM OrderedEntries
-ORDER BY "CreatedAtUtc" DESC
-LIMIT @Limit OFFSET @Offset;
+ORDER BY CreatedAtUtc DESC, Id DESC
+OFFSET @Offset ROWS
+FETCH NEXT @Limit ROWS ONLY;
 ```
 Bu yanaşma yaddaşda heç bir əlavə hesablama aparmadan hər sətirdə anlıq qalıq (running balance) dəyərini sub-millisaniyə sürətlə qaytarır.
 
@@ -146,7 +148,7 @@ Bu yanaşma yaddaşda heç bir əlavə hesablama aparmadan hər sətirdə anlıq
 
 ### 1. Docker Compose ilə 1 Addımda İşə Salma (Tövsiyə olunan)
 
-Bütün sistemi (PostgreSQL bazası, .NET 8 Backend API və Next.js Frontend) işə salmaq üçün layihənin kök qovluğunda bu əmri icra edin:
+Bütün sistemi (Microsoft SQL Server 2022 bazası, .NET 8 Backend API və Next.js Frontend) işə salmaq üçün layihənin kök qovluğunda bu əmri icra edin:
 
 ```bash
 docker-compose up --build
@@ -155,7 +157,7 @@ docker-compose up --build
 Servislər hazır olduqdan sonra:
 * 🌐 **İstifadəçi İnterfeysi (Frontend UI)**: [http://localhost:3000](http://localhost:3000)
 * 📖 **Swagger API Sənədləri**: [http://localhost:8080/swagger](http://localhost:8080/swagger)
-* 🗄 **PostgreSQL Bazası**: `localhost:5432` (db: `ledgerdb`, user: `postgres`, pass: `postgrespassword`)
+* 🗄 **Microsoft SQL Server (MSSQL)**: `localhost:1433` (db: `LedgerDb`, user: `sa`, pass: `Your_Strong_Password123!`)
 
 ---
 

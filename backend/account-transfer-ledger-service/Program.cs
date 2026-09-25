@@ -44,16 +44,16 @@ builder.Services.AddSwaggerGen(c =>
     }
 });
 
-// 3. Database Configuration (PostgreSQL / SQLite fallback)
+// 3. Database Configuration (MSSQL Server / SQLite fallback)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? builder.Configuration.GetConnectionString("PostgreSqlConnection");
+    ?? builder.Configuration.GetConnectionString("SqlServerConnection");
 
-if (!string.IsNullOrEmpty(connectionString) && (connectionString.Contains("Host=") || connectionString.Contains("Server=") || connectionString.Contains("Port=")))
+if (!string.IsNullOrEmpty(connectionString) && (connectionString.Contains("Server=") || connectionString.Contains("Data Source=") || connectionString.Contains("Host=")))
 {
     builder.Services.AddDbContext<LedgerDbContext>(options =>
-        options.UseNpgsql(connectionString, npgsqlOptions =>
+        options.UseSqlServer(connectionString, sqlOptions =>
         {
-            npgsqlOptions.EnableRetryOnFailure(3);
+            sqlOptions.EnableRetryOnFailure(3);
         }));
 }
 else
