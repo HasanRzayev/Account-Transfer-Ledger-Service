@@ -26,7 +26,7 @@ services:
     container_name: ledger-backend-api
     restart: always
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=ledgerdb;Username=postgres;Password=postgrespassword
       - ASPNETCORE_URLS=http://+:8080
     ports:

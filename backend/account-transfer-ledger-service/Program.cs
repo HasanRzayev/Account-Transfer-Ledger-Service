@@ -101,6 +101,9 @@ app.UseCors("AllowFrontend");
 app.UseAuthorization();
 app.MapControllers();
 
+// Ana səhifəni avtomatik /swagger ünvanına yönləndir
+app.MapGet("/", () => Results.Redirect("/swagger"));
+
 // 8. Auto-migrate / seed demo data
 using (var scope = app.Services.CreateScope())
 {
