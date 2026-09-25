@@ -43,31 +43,37 @@ Bu xidmət bank daxilində müştəri hesabları arasında vəsait köçürməl�
 Layihə təmiz qatlı memarlıq (Layered Clean Architecture) prinsipləri ilə dizayn edilmişdir:
 
 ```
-├── backend/
-│   ├── account-transfer-ledger-service/
-│   │   ├── Domain/                 # Domen Varlıqları, Enumlar, Xüsusi İstisnalar
-│   │   │   ├── Entities/           # Account, Transfer, LedgerEntry, IdempotencyRecord
-│   │   │   ├── Enums/              # EntryType (Debit/Credit), IdempotencyStatus
-│   │   │   └── Exceptions/         # InsufficientFundsException, AccountNotFoundException və s.
-│   │   ├── Application/            # Biznes Məntiqi, DTO-lar, Servislər, İnterfeyslər
-│   │   │   ├── DTOs/               # AccountDto, TransferRequest, StatementDto və s.
-│   │   │   ├── Interfaces/         # IAccountService, ITransferService, IStatementService, IIdempotencyService
-│   │   │   └── Services/           # TransferService, AccountService, StatementService, IdempotencyService
-│   │   ├── Infrastructure/         # EF Core, PostgreSQL, Dapper, Kilidləmə mexanizmləri
-│   │   │   ├── Persistence/        # LedgerDbContext, DapperStatementRepository, DbInitializer
-│   │   │   └── Concurrency/        # KeyedAsyncLock (Deadlock-Free Semaphore)
-│   │   ├── Controllers/            # AccountsController, TransfersController, StatementsController, StressTestController
-│   │   ├── Api/Middleware/         # ExceptionHandlingMiddleware (RFC 7807 uyğun)
-│   │   └── Program.cs              # DI, CORS, Swagger konfiqurasiyası
-│   └── AccountTransferLedgerService.Tests/ # xUnit Unit & Concurrency Testləri
+├── src/
+│   ├── AccountTransferLedger.Domain/             # Domen Varlıqları, Enumlar, Xüsusi İstisnalar
+│   │   ├── Entities/                             # Account, Transfer, LedgerEntry, IdempotencyRecord
+│   │   ├── Enums/                                # EntryType (Debit/Credit), IdempotencyStatus
+│   │   └── Exceptions/                           # InsufficientFundsException, AccountNotFoundException və s.
+│   │
+│   ├── AccountTransferLedger.Application/        # Biznes Məntiqi, DTO-lar, İnterfeyslər
+│   │   ├── DTOs/                                 # AccountDto, TransferRequest, StatementDto və s.
+│   │   └── Interfaces/                           # IAccountService, ITransferService, IStatementService, IIdempotencyService
+│   │
+│   ├── AccountTransferLedger.Infrastructure/     # EF Core, MSSQL, Dapper, Kilidləmə mexanizmləri
+│   │   ├── Persistence/                          # LedgerDbContext, DapperStatementRepository, DbInitializer
+│   │   ├── Concurrency/                          # KeyedAsyncLock (Deadlock-Free Semaphore)
+│   │   └── Services/                             # TransferService, AccountService, StatementService, IdempotencyService
+│   │
+│   └── AccountTransferLedger.API/                # REST API Endpoints, Middleware, Swagger
+│       ├── Controllers/                          # AccountsController, TransfersController, StatementsController, StressTestController
+│       ├── Middleware/                           # ExceptionHandlingMiddleware (RFC 7807)
+│       └── Program.cs                            # DI, CORS, Swagger konfiqurasiyası
 │
-├── frontend/
-│   └── account-transfer-ledger-service/ # Next.js + Tailwind CSS Light Theme UI
-│       ├── app/components/         # DashboardOverview, AccountsTab, TransferTab, StatementsTab, ConcurrencyLabTab
-│       └── app/lib/                # API client və TypeScript tipləri
+├── tests/
+│   ├── AccountTransferLedger.UnitTests/          # Unit testlər (Transfer, Idempotency, Overdraft, Ledger)
+│   └── AccountTransferLedger.IntegrationTests/   # Paralel konkurentlik və yüksək yük testləri
 │
-├── docker-compose.yml              # PostgreSQL + Backend API + Frontend servisləri
-└── .github/workflows/ci.yml        # CI avtomatlaşdırma pipeline-ı
+├── frontend/                                     # Next.js + Tailwind CSS Light Theme UI
+│   └── account-transfer-ledger-service/
+│
+├── docker-compose.yml                            # MSSQL + Backend API + Frontend servisləri
+├── Dockerfile                                    # Backend multi-stage build faylı
+├── .gitignore                                    # Git konfiqurasiyası
+└── README.md                                     # Tam sənədləşdirmə
 ```
 
 ---

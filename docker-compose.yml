@@ -22,7 +22,7 @@ services:
 
   backend-api:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: ledger-backend-api
     restart: always

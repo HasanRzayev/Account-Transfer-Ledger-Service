@@ -20,13 +20,13 @@ jobs:
         dotnet-version: '8.0.x'
 
     - name: Restore dependencies
-      run: dotnet restore backend/account-transfer-ledger-service.sln
+      run: dotnet restore AccountTransferLedger.sln
 
     - name: Build Solution
-      run: dotnet build backend/account-transfer-ledger-service.sln --no-restore -c Release
+      run: dotnet build AccountTransferLedger.sln --no-restore -c Release
 
     - name: Run Tests (Unit, Insufficient Funds, Idempotency, Concurrency)
-      run: dotnet test backend/account-transfer-ledger-service.sln --no-build -c Release --verbosity normal
+      run: dotnet test AccountTransferLedger.sln --no-build -c Release --verbosity normal
 
   frontend-build:
     name: Frontend Lint & Build
