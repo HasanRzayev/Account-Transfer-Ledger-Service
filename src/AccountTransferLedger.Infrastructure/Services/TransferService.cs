@@ -10,6 +10,7 @@ using AccountTransferLedger.Domain.Exceptions;
 using AccountTransferLedger.Infrastructure.Concurrency;
 using AccountTransferLedger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AccountTransferLedger.Infrastructure.Services;
@@ -20,6 +21,7 @@ public class TransferService : ITransferService
     private readonly IIdempotencyService _idempotencyService;
     private readonly ILedgerStatementRepository _statementRepository;
     private readonly IKeyedAsyncLock _asyncLock;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TransferService> _logger;
 
     public TransferService(
@@ -28,11 +30,23 @@ public class TransferService : ITransferService
         ILedgerStatementRepository statementRepository,
         IKeyedAsyncLock asyncLock,
         ILogger<TransferService> logger)
+        : this(dbContext, idempotencyService, statementRepository, asyncLock, null, logger)
+    {
+    }
+
+    public TransferService(
+        LedgerDbContext dbContext,
+        IIdempotencyService idempotencyService,
+        ILedgerStatementRepository statementRepository,
+        IKeyedAsyncLock asyncLock,
+        IServiceScopeFactory? scopeFactory,
+        ILogger<TransferService> logger)
     {
         _dbContext = dbContext;
         _idempotencyService = idempotencyService;
         _statementRepository = statementRepository;
         _asyncLock = asyncLock;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -350,7 +364,12 @@ public class TransferService : ITransferService
                 var sw = Stopwatch.StartNew();
                 try
                 {
-                    var res = await TransferFundsAsync(new TransferRequest
+                    using var scope = _scopeFactory?.CreateScope();
+                    var transferService = scope != null 
+                        ? scope.ServiceProvider.GetRequiredService<ITransferService>()
+                        : this;
+
+                    var res = await transferService.TransferFundsAsync(new TransferRequest
                     {
                         FromAccountId = request.SourceAccountId,
                         ToAccountId = request.DestinationAccountId,
@@ -384,13 +403,14 @@ public class TransferService : ITransferService
                 catch (Exception ex)
                 {
                     sw.Stop();
+                    var msg = ex is DomainException de ? de.Message : "Sistemdə gözlənilməz xəta baş verdi.";
                     return new StressTestDetailItem
                     {
                         Index = index,
                         Success = false,
-                        StatusCode = ex is DomainException de ? de.StatusCode : 500,
-                        ErrorCode = ex is DomainException de2 ? de2.ErrorCode : "ERROR",
-                        Message = ex.Message,
+                        StatusCode = ex is DomainException de2 ? de2.StatusCode : 500,
+                        ErrorCode = ex is DomainException de3 ? de3.ErrorCode : "ERROR",
+                        Message = msg,
                         DurationMs = sw.ElapsedMilliseconds
                     };
                 }
