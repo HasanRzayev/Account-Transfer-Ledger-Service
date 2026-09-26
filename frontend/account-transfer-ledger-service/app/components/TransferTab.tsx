@@ -54,7 +54,7 @@ export const TransferTab: React.FC<TransferTabProps> = ({
     setIdempotencyKey(`req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
   };
 
-  const handleTransfer = async (e?: React.FormEvent) => {
+  const handleTransfer = async (e?: React.FormEvent, keyToUse?: string) => {
     if (e) e.preventDefault();
     setError(null);
 
@@ -76,6 +76,8 @@ export const TransferTab: React.FC<TransferTabProps> = ({
       return;
     }
 
+    const key = keyToUse || idempotencyKey;
+
     try {
       setIsLoading(true);
       const res = await onExecuteTransfer({
@@ -83,10 +85,15 @@ export const TransferTab: React.FC<TransferTabProps> = ({
         toAccountId,
         amount: amountNum,
         description: description.trim(),
-      }, idempotencyKey);
+      }, key);
 
       setLastResult(res);
       onTransferSuccess();
+
+      // Növbəti yeni köçürmə üçün yeni açar yaradırıq (əgər təkrar test deyilsə)
+      if (!keyToUse) {
+        generateNewKey();
+      }
     } catch (err: any) {
       setError(err.message || 'Köçürmə zamanı xəta baş verdi.');
     } finally {
@@ -297,10 +304,10 @@ export const TransferTab: React.FC<TransferTabProps> = ({
 
             <button
               type="button"
-              disabled={isLoading}
-              onClick={() => handleTransfer()}
-              title="Eyni açarla yenidən göndər və təkrar icranın qarşısının alındığını gör"
-              className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors whitespace-nowrap"
+              disabled={isLoading || !lastResult}
+              onClick={() => handleTransfer(undefined, lastResult?.idempotencyKey || idempotencyKey)}
+              title="Əvvəlki uğurlu açarla yenidən göndər və təkrar pul çıxılmadığını gör"
+              className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors whitespace-nowrap disabled:opacity-40"
             >
               Təkrar Göndər (İdempotent Test)
             </button>
