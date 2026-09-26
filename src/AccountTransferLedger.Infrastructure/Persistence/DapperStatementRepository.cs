@@ -4,6 +4,7 @@ using AccountTransferLedger.Application.Interfaces;
 using AccountTransferLedger.Domain.Enums;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AccountTransferLedger.Infrastructure.Persistence;
 
@@ -33,14 +34,13 @@ public class DapperStatementRepository : ILedgerStatementRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        const string sql = """
+        const string sql = @"
             SELECT COALESCE(SUM(Amount), 0)
             FROM LedgerEntries
-            WHERE AccountId = @AccountId;
-        """;
-
+            WHERE AccountId = @AccountId;";
+        var transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
         return await connection.ExecuteScalarAsync<decimal>(
-            new CommandDefinition(sql, new { AccountId = accountId }, cancellationToken: cancellationToken)
+            new CommandDefinition(sql, new { AccountId = accountId }, transaction: transaction, cancellationToken: cancellationToken)
         );
     }
 
@@ -70,15 +70,16 @@ public class DapperStatementRepository : ILedgerStatementRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        const string sql = """
+        var transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
+
+        const string sql = @"
             SELECT AccountId, COALESCE(SUM(Amount), 0) AS Balance
             FROM LedgerEntries
             WHERE AccountId IN @Ids
-            GROUP BY AccountId;
-        """;
+            GROUP BY AccountId;";
 
         var results = await connection.QueryAsync<BalanceRow>(
-            new CommandDefinition(sql, new { Ids = idList }, cancellationToken: cancellationToken)
+            new CommandDefinition(sql, new { Ids = idList }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
         return results.ToDictionary(r => r.AccountId, r => r.Balance);
@@ -92,15 +93,16 @@ public class DapperStatementRepository : ILedgerStatementRepository
             await connection.OpenAsync(cancellationToken);
         }
 
+        var transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
+
         // 1. Get Account Details
-        const string accountSql = """
+        const string accountSql = @"
             SELECT Id, AccountNumber, AccountHolderName, Currency
             FROM Accounts
-            WHERE Id = @AccountId;
-        """;
+            WHERE Id = @AccountId;";
 
         var accountInfo = await connection.QuerySingleOrDefaultAsync<AccountRow>(
-            new CommandDefinition(accountSql, new { AccountId = accountId }, cancellationToken: cancellationToken)
+            new CommandDefinition(accountSql, new { AccountId = accountId }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
         if (accountInfo == null)
@@ -113,24 +115,22 @@ public class DapperStatementRepository : ILedgerStatementRepository
         }
 
         // 2. Calculate Current Total Balance
-        const string balanceSql = """
+        const string balanceSql = @"
             SELECT COALESCE(SUM(Amount), 0)
             FROM LedgerEntries
-            WHERE AccountId = @AccountId;
-        """;
+            WHERE AccountId = @AccountId;";
 
         var currentBalance = await connection.ExecuteScalarAsync<decimal>(
-            new CommandDefinition(balanceSql, new { AccountId = accountId }, cancellationToken: cancellationToken)
+            new CommandDefinition(balanceSql, new { AccountId = accountId }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
         // 3. Count Total Matching Entries
-        const string countSql = """
+        const string countSql = @"
             SELECT COUNT(1)
             FROM LedgerEntries
             WHERE AccountId = @AccountId
               AND (@FromDate IS NULL OR CreatedAtUtc >= @FromDate)
-              AND (@ToDate IS NULL OR CreatedAtUtc <= @ToDate);
-        """;
+              AND (@ToDate IS NULL OR CreatedAtUtc <= @ToDate);";
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
             new CommandDefinition(countSql, new 
@@ -138,7 +138,7 @@ public class DapperStatementRepository : ILedgerStatementRepository
                 AccountId = accountId,
                 FromDate = request.FromDate,
                 ToDate = request.ToDate
-            }, cancellationToken: cancellationToken)
+            }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
         // 4. Fetch Paginated Statement with Running Balance (Window Function)
@@ -147,7 +147,7 @@ public class DapperStatementRepository : ILedgerStatementRepository
 
         bool isSqlite = connection.GetType().Name.Contains("Sqlite", StringComparison.OrdinalIgnoreCase);
 
-        string paginatedEntriesSql = isSqlite ? """
+        string paginatedEntriesSql = isSqlite ? @"
             WITH OrderedEntries AS (
                 SELECT 
                     l.Id,
@@ -195,8 +195,7 @@ public class DapperStatementRepository : ILedgerStatementRepository
                 CounterpartyHolderName
             FROM OrderedEntries
             ORDER BY CreatedAtUtc DESC, Id DESC
-            LIMIT @Limit OFFSET @Offset;
-        """ : """
+            LIMIT @Limit OFFSET @Offset;" : @"
             WITH OrderedEntries AS (
                 SELECT 
                     l.Id,
@@ -245,8 +244,7 @@ public class DapperStatementRepository : ILedgerStatementRepository
             FROM OrderedEntries
             ORDER BY CreatedAtUtc DESC, Id DESC
             OFFSET @Offset ROWS
-            FETCH NEXT @Limit ROWS ONLY;
-        """;
+            FETCH NEXT @Limit ROWS ONLY;";
 
         var rawEntries = await connection.QueryAsync<StatementRowDto>(
             new CommandDefinition(paginatedEntriesSql, new
@@ -256,7 +254,7 @@ public class DapperStatementRepository : ILedgerStatementRepository
                 ToDate = request.ToDate,
                 Limit = limit,
                 Offset = offset
-            }, cancellationToken: cancellationToken)
+            }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
         var entriesList = rawEntries.Select(r => new LedgerEntryDto

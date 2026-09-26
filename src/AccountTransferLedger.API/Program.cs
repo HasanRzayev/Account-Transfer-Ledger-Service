@@ -51,10 +51,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 if (!string.IsNullOrEmpty(connectionString) && (connectionString.Contains("Server=") || connectionString.Contains("Data Source=") || connectionString.Contains("Host=")))
 {
     builder.Services.AddDbContext<LedgerDbContext>(options =>
-        options.UseSqlServer(connectionString, sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure(3);
-        }));
+        options.UseSqlServer(connectionString));
 }
 else
 {
