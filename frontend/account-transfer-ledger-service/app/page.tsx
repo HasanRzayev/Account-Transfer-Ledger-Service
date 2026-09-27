@@ -21,7 +21,6 @@ export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cross-tab interaction states
   const [selectedStatementAccountId, setSelectedStatementAccountId] = useState<string | undefined>();
   const [initialTransferAccountId, setInitialTransferAccountId] = useState<string | undefined>();
 

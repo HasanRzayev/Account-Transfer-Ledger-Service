@@ -26,7 +26,6 @@ public class ConcurrentTransferTests
             .ConfigureWarnings(x => x.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        // Seed initial account and balance
         using (var setupContext = new LedgerDbContext(options))
         {
             var sender = new Account { Id = senderId, AccountNumber = "AZ01SENDER", AccountHolderName = "Azər Məmmədov" };

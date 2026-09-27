@@ -18,7 +18,6 @@ public class LedgerDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Account
         modelBuilder.Entity<Account>(entity =>
         {
             entity.HasKey(a => a.Id);
@@ -33,7 +32,6 @@ public class LedgerDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Transfer
         modelBuilder.Entity<Transfer>(entity =>
         {
             entity.HasKey(t => t.Id);
@@ -59,7 +57,6 @@ public class LedgerDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // LedgerEntry
         modelBuilder.Entity<LedgerEntry>(entity =>
         {
             entity.HasKey(l => l.Id);
@@ -70,7 +67,6 @@ public class LedgerDbContext : DbContext
             entity.HasIndex(l => l.TransferId);
         });
 
-        // IdempotencyRecord
         modelBuilder.Entity<IdempotencyRecord>(entity =>
         {
             entity.HasKey(i => i.Id);

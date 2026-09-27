@@ -9,7 +9,6 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Controller & JSON Configuration
 Dapper.SqlMapper.AddTypeHandler(new GuidTypeHandler());
 
 builder.Services.AddControllers()
@@ -21,14 +20,13 @@ builder.Services.AddControllers()
 
 builder.Services.AddEndpointsApiExplorer();
 
-// 2. Swagger / OpenAPI Configuration
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Hesab Köçürmələri və Baş Kitab Xidməti (Account Transfer & Ledger API)",
         Version = "v1",
-        Description = "Yüksək paralellik (concurrency) və tranzaksiya bütövlüyü təmin edən daxili hesablararası pul köçürmə və Baş Kitab (Ledger) sistemi.",
+        Description = "Yüksək paralellik və tranzaksiya bütövlüyü təmin edən daxili hesablararası pul köçürmə və Baş Kitab sistemi.",
         Contact = new OpenApiContact
         {
             Name = "Mühəndislik Komandası",
@@ -44,7 +42,6 @@ builder.Services.AddSwaggerGen(c =>
     }
 });
 
-// 3. Database Configuration (MSSQL Server / SQLite fallback)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? builder.Configuration.GetConnectionString("SqlServerConnection");
 
@@ -60,7 +57,6 @@ else
         options.UseSqlite($"Data Source={dbPath}"));
 }
 
-// 4. Dependency Injection
 builder.Services.AddSingleton<IKeyedAsyncLock, KeyedAsyncLock>();
 builder.Services.AddScoped<ILedgerStatementRepository, DapperStatementRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -68,7 +64,6 @@ builder.Services.AddScoped<ITransferService, TransferService>();
 builder.Services.AddScoped<IStatementService, StatementService>();
 builder.Services.AddScoped<IIdempotencyService, IdempotencyService>();
 
-// 5. CORS Policy
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -82,10 +77,8 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// 6. Global Exception Middleware
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// 7. Swagger
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -97,10 +90,8 @@ app.UseCors("AllowFrontend");
 app.UseAuthorization();
 app.MapControllers();
 
-// Ana səhifəni avtomatik /swagger ünvanına yönləndir
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
-// 8. Auto-migrate / seed demo data
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;

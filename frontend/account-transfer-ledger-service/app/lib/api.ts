@@ -26,7 +26,6 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  // Accounts
   async getAccounts(): Promise<Account[]> {
     const res = await fetch(`${API_BASE_URL}/accounts`, { cache: 'no-store' });
     return handleResponse<Account[]>(res);
@@ -46,7 +45,6 @@ export const api = {
     return handleResponse<Account>(res);
   },
 
-  // Transfers
   async transferFunds(payload: TransferPayload, idempotencyKey?: string): Promise<TransferResult> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -68,7 +66,6 @@ export const api = {
     return handleResponse<TransferSummary[]>(res);
   },
 
-  // Statements
   async getStatement(
     accountId: string, 
     pageNumber = 1, 
@@ -87,7 +84,6 @@ export const api = {
     return handleResponse<AccountStatement>(res);
   },
 
-  // Concurrency Stress Test
   async runStressTest(payload: ConcurrencyStressTestPayload): Promise<ConcurrencyStressTestResult> {
     const res = await fetch(`${API_BASE_URL}/stresstest/concurrency`, {
       method: 'POST',

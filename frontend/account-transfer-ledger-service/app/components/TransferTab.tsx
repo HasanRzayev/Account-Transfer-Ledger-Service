@@ -90,7 +90,6 @@ export const TransferTab: React.FC<TransferTabProps> = ({
       setLastResult(res);
       onTransferSuccess();
 
-      // Növbəti yeni köçürmə üçün yeni açar yaradırıq (əgər təkrar test deyilsə)
       if (!keyToUse) {
         generateNewKey();
       }

@@ -95,7 +95,6 @@ public class DapperStatementRepository : ILedgerStatementRepository
 
         var transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
 
-        // 1. Get Account Details
         const string accountSql = @"
             SELECT Id, AccountNumber, AccountHolderName, Currency
             FROM Accounts
@@ -114,7 +113,6 @@ public class DapperStatementRepository : ILedgerStatementRepository
             };
         }
 
-        // 2. Calculate Current Total Balance
         const string balanceSql = @"
             SELECT COALESCE(SUM(Amount), 0)
             FROM LedgerEntries
@@ -124,7 +122,6 @@ public class DapperStatementRepository : ILedgerStatementRepository
             new CommandDefinition(balanceSql, new { AccountId = accountId }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
-        // 3. Count Total Matching Entries
         const string countSql = @"
             SELECT COUNT(1)
             FROM LedgerEntries
@@ -141,7 +138,6 @@ public class DapperStatementRepository : ILedgerStatementRepository
             }, transaction: transaction, cancellationToken: cancellationToken)
         );
 
-        // 4. Fetch Paginated Statement with Running Balance (Window Function)
         int offset = (Math.Max(1, request.PageNumber) - 1) * Math.Max(1, request.PageSize);
         int limit = Math.Max(1, request.PageSize);
 

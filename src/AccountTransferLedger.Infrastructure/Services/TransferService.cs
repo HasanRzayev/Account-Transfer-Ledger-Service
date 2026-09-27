@@ -21,7 +21,7 @@ public class TransferService : ITransferService
     private readonly IIdempotencyService _idempotencyService;
     private readonly ILedgerStatementRepository _statementRepository;
     private readonly IKeyedAsyncLock _asyncLock;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceScopeFactory? _scopeFactory;
     private readonly ILogger<TransferService> _logger;
 
     public TransferService(
@@ -55,7 +55,6 @@ public class TransferService : ITransferService
         string? idempotencyKey, 
         CancellationToken cancellationToken = default)
     {
-        // 1. Validation
         if (request.Amount <= 0)
         {
             throw new InvalidTransferAmountException(request.Amount);
@@ -69,7 +68,6 @@ public class TransferService : ITransferService
         string sanitizedKey = (idempotencyKey ?? string.Empty).Trim();
         string requestBodyHash = ComputeSha256(JsonSerializer.Serialize(request));
 
-        // 2. Idempotency Check
         if (!string.IsNullOrEmpty(sanitizedKey))
         {
             var existingRecord = await _idempotencyService.GetRecordAsync(sanitizedKey, cancellationToken);
@@ -114,7 +112,6 @@ public class TransferService : ITransferService
             }
         }
 
-        // 3. Concurrency-Safe Transaction Execution
         using var asyncLockHandle = await _asyncLock.LockAsync(request.FromAccountId, request.ToAccountId, cancellationToken);
 
         var firstLockId = request.FromAccountId.CompareTo(request.ToAccountId) < 0 ? request.FromAccountId : request.ToAccountId;
@@ -126,7 +123,6 @@ public class TransferService : ITransferService
         TransferResultDto result;
         try
         {
-            // Acquire row lock in database (Supports MSSQL WITH (UPDLOCK, ROWLOCK, HOLDLOCK), PostgreSQL FOR UPDATE and fallback for SQLite/InMemory)
             if (_dbContext.Database.IsRelational())
             {
                 var isSqlServer = _dbContext.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) ?? false;
@@ -134,7 +130,6 @@ public class TransferService : ITransferService
 
                 if (isSqlServer)
                 {
-                    // Row-level lock in SQL Server (MSSQL)
                     await _dbContext.Database.ExecuteSqlRawAsync(
                         """
                         SELECT Id FROM Accounts WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
@@ -146,7 +141,6 @@ public class TransferService : ITransferService
                 }
                 else if (isPg)
                 {
-                    // Row-level lock in PostgreSQL
                     await _dbContext.Database.ExecuteSqlRawAsync(
                         """
                         SELECT "Id" FROM "Accounts" 
@@ -159,14 +153,12 @@ public class TransferService : ITransferService
                 }
                 else
                 {
-                    // Generic relational fallback
                     await _dbContext.Accounts
                         .Where(a => a.Id == firstLockId || a.Id == secondLockId)
                         .ExecuteUpdateAsync(s => s.SetProperty(a => a.RowVersion, a => a.RowVersion + 1), cancellationToken);
                 }
             }
 
-            // Load Accounts
             var fromAccount = await _dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == request.FromAccountId, cancellationToken);
             if (fromAccount == null)
             {
@@ -189,7 +181,6 @@ public class TransferService : ITransferService
                 throw new DomainException($"Alan hesab qeyri-aktivdir: {toAccount.AccountNumber}");
             }
 
-            // 4. Overdraft Prevention Check (Derived Balance from Ledger)
             var currentSourceBalance = await _statementRepository.GetCalculatedBalanceAsync(request.FromAccountId, cancellationToken);
 
             if (currentSourceBalance < request.Amount)
@@ -199,7 +190,6 @@ public class TransferService : ITransferService
 
             var currentDestBalance = await _statementRepository.GetCalculatedBalanceAsync(request.ToAccountId, cancellationToken);
 
-            // 5. Create Transfer Record & Atomic Double-Entry Ledger Records
             var transfer = new Transfer
             {
                 Id = Guid.NewGuid(),
@@ -263,7 +253,6 @@ public class TransferService : ITransferService
                 WasCachedResponse = false
             };
 
-            // 6. Record Idempotency Success
             if (!string.IsNullOrEmpty(sanitizedKey))
             {
                 await _idempotencyService.MarkCompletedAsync(
