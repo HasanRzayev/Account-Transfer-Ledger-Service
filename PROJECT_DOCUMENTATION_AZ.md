@@ -35,46 +35,115 @@ Bu layihə daxili bank hesabları arasında vəsait köçürmələrini idarə ed
 - İdempotensiya (Idempotent Execution): Şəbəkə xətası və ya təkrar kliklənmə nəticəsində eyni Idempotency-Key başlığı ilə göndərilən sorğular əməliyyatı ikinci dəfə təkrarlamır, keşlənmiş cavabı qaytarır.
 
 ====================================================================
-2. VERİLMİŞ TAPŞIRIQ TƏLƏBLƏRİNİN KODLA DƏQİQ XƏRİTƏLƏNMƏSİ
+2. VERİLMİŞ TAPŞIRIQ TƏLƏBLƏRİNİN KODLA DƏQİQ XƏRİTƏLƏNMƏSİ VƏ DETALLI İZAHI
 ====================================================================
 
-Aşağıdakı cədvəldə tapşırıqdakı hər bir tələb və onun kodda harada tətbiq olunduğu aydın şəkildə göstərilmişdir:
+Aşağıda texniki tapşırıqda göstərilən 7 əsas funksional tələbin biznes məqsədi, yarana biləcək təhlükələr və layihəmizdəki dəqiq texniki həlli detallı şəkildə verilmişdir:
 
-1. Tələb: Account creation with an opening balance (İlkin balansla yeni bank hesabı yaratmaq)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Infrastructure/Services/AccountService.cs
-   Kod Hissəsi / Funksiya: CreateAccountAsync(...) funksiyası Account entity-sini və ilk Opening Balance kredit çıxarışını vahid tranzaksiyada bazaya yazır.
+--------------------------------------------------------------------
+1. TƏLƏB: Account creation with an opening balance (İlkin balans ilə hesabın açılması)
+--------------------------------------------------------------------
+- Biznes Məqsədi: Bankda müştəriyə yeni hesab açılanda ona ilkin vəsait (depozit) daxil edilə bilər. Bu vəsait havadan yaranmır, rəsmi mühasibatlıq baxımından sistemə ilkin mədaxil kimi qeydə alınmalıdır.
+- Yarana Biləcək Risk: Əgər hesab yaradılanda balans sadəcə cədvəldə rəqəm kimi yazılsaydı, həmin pulun haradan gəldiyini çıxarışda (statement) sübut etmək və audit etmək mümkün olmazdı.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.Infrastructure/Services/AccountService.cs
+  * Funksiya: CreateAccountAsync(...) metodu çağırılır.
+  * Əvvəlcə Account obyekti (hesab nömrəsi, müştəri adı, valyuta) yaradılır.
+  * Əgər InitialBalance > 0 göstərilibsə, dərhal LedgerEntries cədvəlinə EntryType.Credit (+məbləğ) qeydi əlavə olunur və təsvirinə "İlkin balans depoziti" yazılır.
+  * Hər iki əməliyyat vahid tranzaksiyada bazaya yazılır (SaveChangesAsync). Beləliklə, ilk qəpikdən etibarən hər bir qalıq baş kitab qeydi ilə təsdiqlənir.
 
-2. Tələb: Fund transfer between two accounts - debit + credit as a single atomic operation (İki hesab arası atomik pul köçürməsi)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Infrastructure/Services/TransferService.cs
-   Kod Hissəsi / Funksiya: ExecuteTransferAsync(...) funksiyasında _dbContext.Database.BeginTransactionAsync() daxilində 1 Debet (-məbləğ) və 1 Kredit (+məbləğ) yaradılır və atomik commit edilir.
+--------------------------------------------------------------------
+2. TƏLƏB: Fund transfer between two accounts - debit + credit as a single atomic operation (İki hesab arası atomik pul köçürməsi)
+--------------------------------------------------------------------
+- Biznes Məqsədi: Bir müştəridən digərinə pul köçürüləndə göndərən hesabdan vəsait silinməli (Debit), alan hesaba isə vəsait daxil edilməlidir (Credit).
+- Yarana Biləcək Risk: Əgər server göndərəndən pulu çıxandan dərhal sonra (elektrik kəsilməsi və ya xəta səbəbindən) sönərsə, göndərənin pulu silinmiş, amma alana çatmamış qalar. Bu, bank üçün ən böyük maliyyə itkisi və riskidir.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.Infrastructure/Services/TransferService.cs
+  * Funksiya: TransferFundsAsync(...) metodu icra olunur.
+  * Əməliyyat _dbContext.Database.BeginTransactionAsync() daxilinə alınır.
+  * Eyni tranzaksiya içində:
+    1. 1 ədəd Transfer əsas audit qeydi yaradılır.
+    2. 1 ədəd göndərən üçün LedgerEntry (Amount = -məbləğ, EntryType = Debit).
+    3. 1 ədəd alan üçün LedgerEntry (Amount = +məbləğ, EntryType = Credit).
+  * Ən sonda transaction.CommitAsync() çağırılır. Hər hansı xəta olarsa, Rollback baş verir və sistemdə heç bir tək qeyd qalmır (100% Atomiklik).
 
-3. Tələb: Balance is derived from ledger entries, not stored as a mutable column (Balans cədvəl sütunu deyil, çıxarışların cəmidir)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Domain/Entities/Account.cs və LedgerDbContext.cs
-   Kod Hissəsi / Funksiya: Account entity-sində Balance sütunu yoxdur. Balans hər dəfə LedgerEntries.Where(...).SumAsync(e => e.Amount) və ya Dapper SUM(Amount) ilə hesablanır.
+--------------------------------------------------------------------
+3. TƏLƏB: Balance is derived from ledger entries, not stored as a mutable column (Balans dəyişən sütun deyil, çıxarışlardan dinamik hesablanır)
+--------------------------------------------------------------------
+- Biznes Məqsədi: Ənənəvi və qüsurlu sistemlərdə Accounts cədvəlində Balance = 500 sütunu olur və hər köçürmədə UPDATE Accounts SET Balance = Balance - 50 edilir. Bu yanaşmada kimsə bazaya birbaşa müdaxilə etsə və ya proqramda xəta olsa, real pul hərəkəti ilə balans arasında fərq yaranır.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.Domain/Entities/Account.cs
+  * Domen modelində heç bir Balance sütunu yoxdur!
+  * Hesabın cari balansı lazım olduqda src/AccountTransferLedger.Infrastructure/Persistence/DapperStatementRepository.cs vasitəsilə birbaşa Baş Kitabdakı bütün sətirlər toplanır:
+    SELECT COALESCE(SUM(Amount), 0) FROM LedgerEntries WHERE AccountId = @AccountId;
+  * Bu, İkiqat Mühasibatlıq (Double-Entry Ledger) prinsipinə tam uyğundur: Balans faktiki olaraq keçmiş hadisələrin riyazi cəmidir və saxtalaşdırıla bilməz.
 
-4. Tələb: Idempotent transfer execution via Idempotency-Key header (Eyni açarla təkrar sorğu köçürməni 2 dəfə icra etməməlidir)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Infrastructure/Services/IdempotencyService.cs və TransferService.cs
-   Kod Hissəsi / Funksiya: GetOrCreateRecordAsync və SaveResponseAsync funksiyaları ilə açar yoxlanılır. Əgər status Completed olarsa, köçürmə təkrarlanmır və saxlanılmış JSON cavabı dərhal qaytarılır.
+--------------------------------------------------------------------
+4. TƏLƏB: Idempotent transfer execution via Idempotency-Key header (Təkrar sorğunun təkrar icrasının qarşısının alınması)
+--------------------------------------------------------------------
+- Biznes Məqsədi: İstifadəçi zəif internet səbəbilə köçürmə düyməsinə 2-3 dəfə dalbadal basa bilər və ya mobil tətbiq şəbəkə timeout-u alıb sorğunu avtomatik təkrar göndərə bilər.
+- Yarana Biləcək Risk: Əgər sistem sorğunun unikal olduğunu yoxlamasa, eyni 50 AZN-lik köçürmə 3 dəfə icra olunar və müştərinin kartından 150 AZN silinər.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.Infrastructure/Services/IdempotencyService.cs və TransferService.cs
+  * Hər POST /api/transfers sorğusunun header-ində Idempotency-Key (məs: UUID) göndərilir.
+  * IdempotencyService əvvəlcə bazada bu açarın olub-olmadığını yoxlayır.
+  * Əgər açar artıq uğurla tamamlanıbsa (Status == Completed), köçürmə məntiqi təkrar icra edilmir. Bazada saxlanılmış ilkin cavab (ResponseBody) oxunur və dərhal WasCachedResponse: true ilə istifadəçiyə qaytarılır.
+  * Nəticədə hesabdan yalnız 1 dəfə pul çıxılır, təkrar basılmalar isə təhlükəsiz qarşılanır.
 
-5. Tələb: Overdraft prevention under concurrency (Eyni anda gələn köçürmələrdə balans mənfiyə düşməməlidir)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Infrastructure/Services/TransferService.cs və Concurrency/KeyedAsyncLock.cs
-   Kod Hissəsi / Funksiya: 1) KeyedAsyncLock ilə in-memory asinxron kilid. 2) MSSQL səviyyəsində WITH (UPDLOCK, ROWLOCK, HOLDLOCK) əmri ilə sıra kilidlənməsi. Balans köçürmə məbləğindən az olduqda InsufficientFundsException atılır.
+--------------------------------------------------------------------
+5. TƏLƏB: Overdraft prevention under concurrency (Eyni anda gələn köçürmələrdə balansın mənfiyə düşməsinin qarşısının alınması)
+--------------------------------------------------------------------
+- Biznes Məqsədi: Balansında cəmi 100 AZN olan hesaba eyni millisaniyədə iki fərqli yerdən 100 AZN-lik iki köçürmə sorğusu gəldikdə yarış şəraiti (Race Condition) yaranır.
+- Yarana Biləcək Risk: Hər iki proses eyni anda balansı oxuyub 100 AZN görür və hər ikisi 100 AZN çıxarış edir. Nəticədə balans -100 AZN olur (icazəsiz overdraft).
+- Layihədəki Həlli:
+  * 1-ci Qat (Tətbiqdaxili Kilid): src/AccountTransferLedger.Infrastructure/Concurrency/KeyedAsyncLock.cs vasitəsilə eyni hesaba aid sorğular asinxron növbəyə durur.
+  * 2-ci Qat (Baza Səviyyəsində Fiziki Kilid): src/AccountTransferLedger.Infrastructure/Services/TransferService.cs:
+    SELECT Id FROM Accounts WITH (UPDLOCK, ROWLOCK, HOLDLOCK) WHERE Id IN (@Id1, @Id2) ORDER BY Id;
+  * Sorğu 1 hesabı kilidləyir, 100 AZN çıxır və balansı 0 edir. Sorğu 2 kilidi alan kimi cari balansı oxuyur (0 AZN görür), dərhal InsufficientFundsException atır və HTTP 422 qaytarır. Balans heç bir halda mənfiyə düşə bilmir.
 
-6. Tələb: Paginated account statement with running balance (Səhifələnmiş çıxarış və cari qalıq)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Infrastructure/Persistence/DapperStatementRepository.cs
-   Kod Hissəsi / Funksiya: GetPaginatedStatementAsync(...) funksiyası Dapper və SQL Window funksiyası (SUM(Amount) OVER (PARTITION BY AccountId ORDER BY CreatedAtUtc ASC)) vasitəsilə hər sətirdə RunningBalance hesablayır və OFFSET / FETCH NEXT ilə səhifələyir.
+--------------------------------------------------------------------
+6. TƏLƏB: Paginated account statement with running balance (Səhifələnmiş hesab çıxarışı və qaçış qalığı)
+--------------------------------------------------------------------
+- Biznes Məqsədi: Müştəri bank çıxarışına baxarkən hər bir əməliyyatın xronologiyasını və həmin əməliyyatdan sonra hesabında nə qədər qalıq qaldığını (Running Balance) görməlidir. Milyonlarla qeyd ola biləcəyi üçün bu əməliyyat səhifələnməli (PageNumber, PageSize) və çox sürətli işləməlidir.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.Infrastructure/Persistence/DapperStatementRepository.cs
+  * Yüksək sürətli Dapper Micro-ORM və SQL-in analitik Window funksiyası istifadə olunur:
+    SELECT l.Id, l.Amount, l.EntryType, l.Description, l.CreatedAtUtc,
+           SUM(l.Amount) OVER (
+               PARTITION BY l.AccountId 
+               ORDER BY l.CreatedAtUtc ASC, l.Id ASC
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) as RunningBalance
+    FROM LedgerEntries l
+    WHERE l.AccountId = @AccountId
+    ORDER BY l.CreatedAtUtc DESC
+    OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+  * Bu sorğu bütün keçmiş sətirləri yaddaşa çəkmədən, birbaşa SQL Server səviyyəsində qaçış balansını hesablayır və səhifələnmiş şəkildə millisaniyələr ərzində geri qaytarır.
 
-7. Tələb: Proper error responses (400, 404, 409, 422 - Düzgün xəta kodları)
-   Tətbiq Olunduğu Fayl: src/AccountTransferLedger.Domain/Exceptions/DomainExceptions.cs və AccountTransferLedger.API/Middleware/ExceptionHandlingMiddleware.cs
-   Kod Hissəsi / Funksiya: InsufficientFundsException -> 422 Unprocessable Entity, AccountNotFoundException -> 404 Not Found, IdempotencyConflictException -> 409 Conflict, ValidationException -> 400 Bad Request.
+--------------------------------------------------------------------
+7. TƏLƏB: Proper error responses (Standartlaşdırılmış xəta idarəetməsi)
+--------------------------------------------------------------------
+- Biznes Məqsədi: API xəta baş verəndə sirli 500 server erroru əvəzinə frontend-ə və mobil tətbiqə standartlaşdırılmış, aydın və maşın tərəfindən oxuna bilən JSON formatında cavab verməlidir.
+- Layihədəki Həlli:
+  * Fayl: src/AccountTransferLedger.API/Middlewares/ExceptionMiddleware.cs və src/AccountTransferLedger.Domain/Exceptions/DomainExceptions.cs
+  * Bütün qlobal xətaları tutur və domen istisnalarını müvafiq HTTP kodlarına çevirir:
+    1. InsufficientFundsException -> HTTP 422 Unprocessable Entity (INSUFFICIENT_FUNDS, mövcud və tələb olunan balansla birlikdə).
+    2. InvalidTransferAmountException / SelfTransferException -> HTTP 400 Bad Request (INVALID_AMOUNT, SELF_TRANSFER).
+    3. AccountNotFoundException -> HTTP 404 Not Found (ACCOUNT_NOT_FOUND).
+    4. IdempotencyConflictException -> HTTP 409 Conflict (IDEMPOTENCY_CONFLICT).
+  * Cavab strukturu həmişə vahid formatdadır: {"success": false, "error": {"code": "...", "message": "..."}}
 
-8. Tələb: Concurrency Integration Test (Paralel sorğuların avtomatik testi)
-   Tətbiq Olunduğu Fayl: tests/AccountTransferLedger.IntegrationTests/ConcurrentTransferTests.cs
-   Kod Hissəsi / Funksiya: ConcurrentTransfers_ShouldNeverAllowNegativeBalance_AndPreventOverdraft metodu: 100 AZN balansı olan hesaba eyni anda 10 paralel 20 AZN-lik köçürmə (cəmi 200 AZN) göndərilir. Dəqiq 5-i uğurlu olur, 5-i 422 xətası alır və son balans dəqiq 0.00 AZN qalır.
+--------------------------------------------------------------------
+8. TƏLƏB: Concurrency Integration Test (Paralel sorğuların avtomatik testi)
+--------------------------------------------------------------------
+- Fayl: tests/AccountTransferLedger.IntegrationTests/ConcurrentTransferTests.cs
+- Həlli: ConcurrentTransfers_ShouldNeverAllowNegativeBalance_AndPreventOverdraft metodu: 100 AZN balansı olan hesaba eyni anda 10 paralel 20 AZN-lik köçürmə (cəmi 200 AZN) göndərilir. Dəqiq 5-i uğurlu olur, 5-i 422 xətası alır və son balans dəqiq 0.00 AZN qalır.
 
-9. Tələb: DevOps (Docker-Compose & CI)
-   Tətbiq Olunduğu Fayl: docker-compose.yml, Dockerfile, .github/workflows/ci.yml
-   Kod Hissəsi / Funksiya: Multi-container MSSQL 2022 + Backend API + Next.js Frontend və GitHub Actions CI pipeline.
+--------------------------------------------------------------------
+9. TƏLƏB: DevOps (Docker-Compose & CI Pipeline)
+--------------------------------------------------------------------
+- Fayllar: docker-compose.yml, Dockerfile, .github/workflows/ci.yml
+- Həlli: Multi-container MSSQL 2022 + Backend API + Next.js Frontend və GitHub Actions CI pipeline.
 
 ====================================================================
 3. LAYİHƏNİN QOVLUQ ARXİTEKTURASI (CLEAN ARCHITECTURE)
