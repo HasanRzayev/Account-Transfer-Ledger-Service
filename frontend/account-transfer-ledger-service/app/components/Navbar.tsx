@@ -51,23 +51,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-slate-800 tracking-tight">LedgerBank</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                  Double-Entry Core
-                </span>
-              </div>
+              <span className="font-bold text-lg text-slate-800 tracking-tight">LedgerBank</span>
               <p className="text-xs text-slate-500 font-medium">Hesab Köçürmələri və Baş Kitab Xidməti</p>
             </div>
           </div>
 
           {/* Center Summary Pills */}
           <div className="hidden md:flex items-center gap-4 text-xs font-medium">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>İdempotentlik & Overdraft Qorunması: <strong className="text-emerald-700">Aktiv</strong></span>
-            </div>
-
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800">
               <span>Ümumi Depozit:</span>
               <strong className="font-bold text-sm text-blue-900">{totalBalance.toLocaleString('az-AZ', { minimumFractionDigits: 2 })} AZN</strong>

@@ -115,20 +115,10 @@ export const TransferTab: React.FC<TransferTabProps> = ({
       {/* Header Banner */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-800">Atomik Pul Köçürməsi</h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-              ACID Transaction
-            </span>
-          </div>
+          <h2 className="text-lg font-bold text-slate-800">Hesablararası Pul Köçürməsi</h2>
           <p className="text-xs text-slate-500 mt-1">
-            İkiqat qeydiyyat (Double-Entry) və Idempotency-Key ilə tam təhlükəsiz köçürmə
+            Daxili hesablararası təhlükəsiz və anlıq pul köçürməsi
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-800">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
-          <span>Overdraft Qarşısının Alınması: 100% Zəmanət</span>
         </div>
       </div>
 
@@ -259,7 +249,7 @@ export const TransferTab: React.FC<TransferTabProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                 <Key className="w-3.5 h-3.5 text-blue-600" />
-                <span>Idempotency-Key (Təkrar İcranın Qarşısını Alan Unikal Açar):</span>
+                <span>Tranzaksiya Açarı (Idempotency Key):</span>
               </div>
               <button
                 type="button"
@@ -276,9 +266,6 @@ export const TransferTab: React.FC<TransferTabProps> = ({
               onChange={(e) => setIdempotencyKey(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 font-mono text-xs text-slate-700 outline-hidden"
             />
-            <p className="text-[11px] text-slate-500">
-              Bu açar eyni qaldıqda, təkrar basıldıqda ikili vəsait silinməsi baş vermir, keşlənmiş əvvəlki cavab qaytarılır.
-            </p>
           </div>
 
           {/* Submit Actions */}

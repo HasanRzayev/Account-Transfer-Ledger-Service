@@ -142,7 +142,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© {new Date().getFullYear()} LedgerBank Xidməti. Double-Entry Architecture & Idempotent Transactions.</p>
+          <p>© {new Date().getFullYear()} LedgerBank Xidməti. Bütün hüquqlar qorunur.</p>
           <div className="flex items-center gap-4 text-slate-400">
             <span>ASP.NET Core 8 Web API</span>
             <span>•</span>

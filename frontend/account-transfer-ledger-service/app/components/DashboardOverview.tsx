@@ -95,19 +95,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-        {/* Security & Concurrency Standard */}
+        {/* Security & System Health */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tranzaksiya Bütövlüyü</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Sistem Statusu</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="text-2xl font-bold text-emerald-700 tracking-tight">
-            100% ACID
+            Aktiv
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-            <span>Row-Level Lock + Idempotency</span>
+            <span>Bütün xidmətlər işləkdir</span>
           </div>
         </div>
       </div>

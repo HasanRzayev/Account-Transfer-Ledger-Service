@@ -140,10 +140,10 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
           <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs text-blue-800 space-y-1">
             <div className="flex items-center gap-1.5 font-semibold text-blue-900">
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Baş Kitab (Double-Entry Ledger) Zəmanəti:</span>
+              <span>İlkin Balans Qeydiyyatı:</span>
             </div>
             <p className="text-slate-600 leading-relaxed text-[11px]">
-              Daxil edilən ilkin balans cədvəldə sabit rəqəm kimi deyil, birbaşa Baş Kitabda (Ledger) atomik <strong>Kredit (+)</strong> qeydi kimi formalaşdırılır.
+              Daxil edilən ilkin vəsait hesab açıldıqdan sonra cari qalıq kimi qeydə alınacaqdır.
             </p>
           </div>
 

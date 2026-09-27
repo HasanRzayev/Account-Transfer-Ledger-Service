@@ -85,16 +85,11 @@ export const ConcurrencyLabTab: React.FC<ConcurrencyLabTabProps> = ({
             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
               <Zap className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Konkurentlik və Overdraft Test Laboratoriyası</h2>
+            <h2 className="text-lg font-bold text-slate-800">Paralel Əməliyyat və Stress Testi</h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Eyni hesaba eyni millisaniyədə paralel sorğular göndərərək yarış şərtlərini (race conditions) və overdraft qarşısının alınmasını canlı sınaqdan keçirin.
+            Eyni hesaba eyni anda paralel sorğular göndərərək sistemin etibarlılığını və balans dəqiqliyini sınaqdan keçirin.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Pessimistic Row Lock & ACID Integrity</span>
         </div>
       </div>
 
@@ -235,7 +230,7 @@ export const ConcurrencyLabTab: React.FC<ConcurrencyLabTabProps> = ({
                 </div>
 
                 <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 shadow-xs">
-                  <span className="text-xs font-semibold text-amber-800">Qorunan (Overdraft Block)</span>
+                  <span className="text-xs font-semibold text-amber-800">Rədd Edilən Sorğular</span>
                   <div className="text-xl font-bold text-amber-700 mt-1">{testResult.failedRequests} ədəd</div>
                   <span className="text-[11px] text-amber-600 font-medium">422 Vəsait Çatışmazlığı</span>
                 </div>
@@ -248,7 +243,7 @@ export const ConcurrencyLabTab: React.FC<ConcurrencyLabTabProps> = ({
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-emerald-900">
-                    Bütövlük Təsdiqi: Balans Mənfiyə Düşmədi!
+                    Test Nəticəsi: Balans Dəqiqliyi Təsdiqləndi
                   </h4>
                   <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                     İlkin Balans: <strong>{testResult.initialSourceBalance.toFixed(2)} AZN</strong> ➔ 

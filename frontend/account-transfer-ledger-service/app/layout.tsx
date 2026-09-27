@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "LedgerBank - Hesab Köçürmələri və Baş Kitab Xidməti",
-  description: "Daxili hesablararası atomik pul köçürmələri, ikiqat mühasibatlıq (Double-Entry Ledger) və yüksək paralellik (concurrency) idarəetmə xidməti.",
+  description: "Daxili hesablararası təhlükəsiz pul köçürmələri və hesab idarəetmə sistemi.",
 };
 
 export default function RootLayout({
